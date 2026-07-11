@@ -17,7 +17,7 @@ const TABLE_MAP = {
 router.get('/:entity', async (req, res) => {
   const table = TABLE_MAP[req.params.entity];
   if (!table) return res.status(404).json({ error: 'Unknown entity' });
-  const { _sort, _limit, ...filters } = req.query;
+  const { _sort, _limit, path, ...filters } = req.query;
   // Convert string booleans
   for (const k of Object.keys(filters)) {
     if (filters[k] === 'true') filters[k] = 1;
