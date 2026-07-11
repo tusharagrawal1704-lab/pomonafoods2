@@ -246,14 +246,15 @@ async function seedIfEmpty() {
   }
 }
 
-// Self-invoking database initialization & seeding
-(async () => {
+// Database initialization & seeding promise
+const initPromise = (async () => {
   try {
     await initDb();
     await seedIfEmpty();
     console.log('✓ Database initialization/seed complete.');
   } catch (err) {
     console.error('✗ Database initialization/seed failed:', err);
+    throw err;
   }
 })();
 
@@ -328,4 +329,4 @@ const entityOps = {
   }
 };
 
-module.exports = { db, entityOps, generateId: randomUUID };
+module.exports = { db, entityOps, generateId: randomUUID, initPromise };

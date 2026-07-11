@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { initPromise } = require('./db');
 require('dotenv').config();
 
 const app = express();
@@ -29,6 +30,17 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   const passport = require('passport');
   app.use(passport.initialize());
 }
+
+// Await database initialization before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await initPromise;
+    next();
+  } catch (err) {
+    console.error('Database initialization failed:', err);
+    res.status(500).json({ error: 'Database failed to initialize' });
+  }
+});
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', require('./routes/authRoutes'));
