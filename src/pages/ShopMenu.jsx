@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { entities } from "@/api/base44Client";
+import { entities } from "@/api/apiClient";
 import { getShopConfig } from "@/lib/shopConfig";
 import { useCart } from "@/lib/CartContext";
 import MenuItemCard from "@/components/menu/MenuItemCard";

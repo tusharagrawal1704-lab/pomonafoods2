@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { entities } from "@/api/base44Client";
+import { entities } from "@/api/apiClient";
 import { Plus, Pencil, Trash2, Loader2, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

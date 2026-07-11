@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { entities } from "@/api/base44Client";
+import { entities } from "@/api/apiClient";
 import { ShoppingBag, Users, Tag, TrendingUp, DollarSign, Clock, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";

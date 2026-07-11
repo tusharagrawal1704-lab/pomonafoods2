@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { entities, auth } from "@/api/base44Client";
+import { entities, auth } from "@/api/apiClient";
 import { Crown, Check, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";

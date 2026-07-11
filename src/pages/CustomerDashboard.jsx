@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { entities } from "@/api/base44Client";
+import { entities } from "@/api/apiClient";
 import { Link } from "react-router-dom";
 import { getShopConfig } from "@/lib/shopConfig";
 import { Package, Loader2, Crown, ArrowRight } from "lucide-react";

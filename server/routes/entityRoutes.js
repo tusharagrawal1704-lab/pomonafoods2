@@ -14,7 +14,7 @@ const TABLE_MAP = {
 };
 
 // ─── Filter / List ────────────────────────────────────────────────────────────
-router.get('/:entity', (req, res) => {
+router.get('/:entity', async (req, res) => {
   const table = TABLE_MAP[req.params.entity];
   if (!table) return res.status(404).json({ error: 'Unknown entity' });
   const { _sort, _limit, ...filters } = req.query;
@@ -24,7 +24,7 @@ router.get('/:entity', (req, res) => {
     else if (filters[k] === 'false') filters[k] = 0;
   }
   try {
-    const rows = entityOps.filter(table, filters, _sort || '-created_date', parseInt(_limit) || 200);
+    const rows = await entityOps.filter(table, filters, _sort || '-created_date', parseInt(_limit) || 200);
     res.json(rows);
   } catch (err) {
     console.error(err);
@@ -33,20 +33,25 @@ router.get('/:entity', (req, res) => {
 });
 
 // ─── Get by ID ────────────────────────────────────────────────────────────────
-router.get('/:entity/:id', (req, res) => {
-  const table = TABLE_MAP[req.params.entity];
-  if (!table) return res.status(404).json({ error: 'Unknown entity' });
-  const row = entityOps.get(table, req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  res.json(row);
-});
-
-// ─── Create ───────────────────────────────────────────────────────────────────
-router.post('/:entity', requireAuth, (req, res) => {
+router.get('/:entity/:id', async (req, res) => {
   const table = TABLE_MAP[req.params.entity];
   if (!table) return res.status(404).json({ error: 'Unknown entity' });
   try {
-    const row = entityOps.create(table, req.body);
+    const row = await entityOps.get(table, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    res.json(row);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Query failed' });
+  }
+});
+
+// ─── Create ───────────────────────────────────────────────────────────────────
+router.post('/:entity', requireAuth, async (req, res) => {
+  const table = TABLE_MAP[req.params.entity];
+  if (!table) return res.status(404).json({ error: 'Unknown entity' });
+  try {
+    const row = await entityOps.create(table, req.body);
     res.status(201).json(row);
   } catch (err) {
     console.error(err);
@@ -55,11 +60,11 @@ router.post('/:entity', requireAuth, (req, res) => {
 });
 
 // ─── Update ───────────────────────────────────────────────────────────────────
-router.patch('/:entity/:id', requireAuth, (req, res) => {
+router.patch('/:entity/:id', requireAuth, async (req, res) => {
   const table = TABLE_MAP[req.params.entity];
   if (!table) return res.status(404).json({ error: 'Unknown entity' });
   try {
-    const row = entityOps.update(table, req.params.id, req.body);
+    const row = await entityOps.update(table, req.params.id, req.body);
     res.json(row);
   } catch (err) {
     console.error(err);
@@ -68,11 +73,16 @@ router.patch('/:entity/:id', requireAuth, (req, res) => {
 });
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
-router.delete('/:entity/:id', requireOwner, (req, res) => {
+router.delete('/:entity/:id', requireOwner, async (req, res) => {
   const table = TABLE_MAP[req.params.entity];
   if (!table) return res.status(404).json({ error: 'Unknown entity' });
-  entityOps.delete(table, req.params.id);
-  res.json({ success: true });
+  try {
+    await entityOps.delete(table, req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Delete failed' });
+  }
 });
 
 module.exports = router;

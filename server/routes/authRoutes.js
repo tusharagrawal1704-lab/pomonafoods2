@@ -17,17 +17,17 @@ router.post('/register', async (req, res) => {
     const { email, password, full_name } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+    const existing = await db.get('SELECT id FROM users WHERE email = ?', email.toLowerCase());
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
 
     const password_hash = await bcrypt.hash(password, 12);
     const otp_code = generateOtp();
     const otp_expires = Date.now() + 10 * 60 * 1000; // 10 min
 
-    db.prepare(`
+    await db.run(`
       INSERT INTO users (id, email, password_hash, full_name, otp_code, otp_expires, is_verified, role)
       VALUES (?, ?, ?, ?, ?, ?, 0, 'customer')
-    `).run(generateId(), email.toLowerCase(), password_hash, full_name || null, otp_code, otp_expires);
+    `, generateId(), email.toLowerCase(), password_hash, full_name || null, otp_code, otp_expires);
 
     await sendOtpEmail(email.toLowerCase(), otp_code);
     res.json({ success: true, message: 'OTP sent to email' });
@@ -38,15 +38,15 @@ router.post('/register', async (req, res) => {
 });
 
 // ─── Verify OTP ──────────────────────────────────────────────────────────────
-router.post('/verify-otp', (req, res) => {
+router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otpCode } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
+    const user = await db.get('SELECT * FROM users WHERE email = ?', email?.toLowerCase());
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (user.otp_code !== otpCode) return res.status(400).json({ error: 'Invalid verification code' });
-    if (Date.now() > user.otp_expires) return res.status(400).json({ error: 'Verification code expired' });
+    if (Date.now() > Number(user.otp_expires)) return res.status(400).json({ error: 'Verification code expired' });
 
-    db.prepare('UPDATE users SET is_verified = 1, otp_code = NULL, otp_expires = NULL WHERE id = ?').run(user.id);
+    await db.run('UPDATE users SET is_verified = 1, otp_code = NULL, otp_expires = NULL WHERE id = ?', user.id);
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
     res.json({ access_token: token, user: { id: user.id, email: user.email, full_name: user.full_name, role: user.role } });
@@ -60,12 +60,12 @@ router.post('/verify-otp', (req, res) => {
 router.post('/resend-otp', async (req, res) => {
   try {
     const { email } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
+    const user = await db.get('SELECT * FROM users WHERE email = ?', email?.toLowerCase());
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const otp_code = generateOtp();
     const otp_expires = Date.now() + 10 * 60 * 1000;
-    db.prepare('UPDATE users SET otp_code = ?, otp_expires = ? WHERE id = ?').run(otp_code, otp_expires, user.id);
+    await db.run('UPDATE users SET otp_code = ?, otp_expires = ? WHERE id = ?', otp_code, otp_expires, user.id);
 
     await sendOtpEmail(email.toLowerCase(), otp_code);
     res.json({ success: true });
@@ -78,7 +78,7 @@ router.post('/resend-otp', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
+    const user = await db.get('SELECT * FROM users WHERE email = ?', email?.toLowerCase());
     if (!user || !user.password_hash) return res.status(401).json({ error: 'Invalid email or password' });
     if (!user.is_verified) return res.status(401).json({ error: 'Please verify your email first' });
 
@@ -93,22 +93,26 @@ router.post('/login', async (req, res) => {
 });
 
 // ─── Me ──────────────────────────────────────────────────────────────────────
-router.get('/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, email, full_name, role, created_date FROM users WHERE id = ?').get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+router.get('/me', requireAuth, async (req, res) => {
+  try {
+    const user = await db.get('SELECT id, email, full_name, role, created_date FROM users WHERE id = ?', req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve user info' });
+  }
 });
 
 // ─── Password Reset Request ───────────────────────────────────────────────────
 router.post('/reset-password-request', async (req, res) => {
   try {
     const { email } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email?.toLowerCase());
+    const user = await db.get('SELECT * FROM users WHERE email = ?', email?.toLowerCase());
     // Always respond success to avoid user enumeration
     if (user) {
       const reset_token = generateId();
       const reset_expires = Date.now() + 60 * 60 * 1000; // 1 hour
-      db.prepare('UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?').run(reset_token, reset_expires, user.id);
+      await db.run('UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?', reset_token, reset_expires, user.id);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       const resetLink = `${frontendUrl}/reset-password?token=${reset_token}`;
       await sendPasswordResetEmail(email.toLowerCase(), resetLink);
@@ -123,12 +127,12 @@ router.post('/reset-password-request', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { resetToken, newPassword } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE reset_token = ?').get(resetToken);
+    const user = await db.get('SELECT * FROM users WHERE reset_token = ?', resetToken);
     if (!user) return res.status(400).json({ error: 'Invalid reset link' });
-    if (Date.now() > user.reset_expires) return res.status(400).json({ error: 'Reset link expired' });
+    if (Date.now() > Number(user.reset_expires)) return res.status(400).json({ error: 'Reset link expired' });
 
     const password_hash = await bcrypt.hash(newPassword, 12);
-    db.prepare('UPDATE users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?').run(password_hash, user.id);
+    await db.run('UPDATE users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?', password_hash, user.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reset password' });
@@ -148,14 +152,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const email = profile.emails[0].value.toLowerCase();
-      let user = db.prepare('SELECT * FROM users WHERE google_id = ? OR email = ?').get(profile.id, email);
+      let user = await db.get('SELECT * FROM users WHERE google_id = ? OR email = ?', profile.id, email);
       if (!user) {
         const id = generateId();
-        db.prepare(`INSERT INTO users (id, email, full_name, google_id, is_verified, role) VALUES (?, ?, ?, ?, 1, 'customer')`)
-          .run(id, email, profile.displayName, profile.id);
-        user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+        await db.run(`INSERT INTO users (id, email, full_name, google_id, is_verified, role) VALUES (?, ?, ?, ?, 1, 'customer')`, id, email, profile.displayName, profile.id);
+        user = await db.get('SELECT * FROM users WHERE id = ?', id);
       } else if (!user.google_id) {
-        db.prepare('UPDATE users SET google_id = ?, is_verified = 1 WHERE id = ?').run(profile.id, user.id);
+        await db.run('UPDATE users SET google_id = ?, is_verified = 1 WHERE id = ?', profile.id, user.id);
       }
       done(null, user);
     } catch (err) {
@@ -185,7 +188,7 @@ router.get('/google/callback', (req, res, next) => {
   if (!googleOAuthEnabled) {
     return res.redirect('http://localhost:5173/login');
   }
-  passport.authenticate('google', { session: false, failureRedirect: '/login' })(req, res, () => {
+  passport.authenticate('google', { session: false, failureRedirect: '/login' })(req, res, async () => {
     const token = signToken({ id: req.user.id, email: req.user.email, role: req.user.role });
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     res.redirect(`${frontendUrl}/?access_token=${token}`);

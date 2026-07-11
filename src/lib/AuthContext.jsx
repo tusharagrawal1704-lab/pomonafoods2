@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { auth, setToken, clearToken } from '@/api/base44Client';
+import { auth, setToken, clearToken } from '@/api/apiClient';
 
 const AuthContext = createContext();
 
